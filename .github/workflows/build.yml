@@ -12,7 +12,9 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Fix XML URLs
-        run: sed -i 's|http://android.com|http://android.com|g' app/src/main/AndroidManifest.xml app/src/main/res/xml/accessibility_service_config.xml
+        run: |
+          URL="http://schemas.""://android.com"
+          sed -i "s|xmlns:android=\"[^\"]*\"|xmlns:android=\"$URL\"|g" app/src/main/AndroidManifest.xml app/src/main/res/xml/accessibility_service_config.xml
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
