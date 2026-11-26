@@ -14,7 +14,7 @@ jobs:
       - name: Generate App Files
         run: |
           mkdir -p app/src/main/res/values app/src/main/res/xml app/src/main/java/com/example/multirideautoaccept
-          echo '<resources><string name="app_name">MultiRide AutoAccept</string><string name="desc">Auto accept rides</string></resources>' > app/src/main/res/values/strings.xml
+          echo '<resources><string name="app_name">MultiRide AutoAccept</string><string name="desc">Auto accept Ola and Rapido rides</string></resources>' > app/src/main/res/values/strings.xml
 
           cat << 'EOF' > app/src/main/java/com/example/multirideautoaccept/MainActivity.kt
           package com.example.multirideautoaccept
@@ -36,7 +36,7 @@ jobs:
                       setPadding(45, 55, 45, 45)
                       setBackgroundColor(Color.WHITE)
                   }
-                  val title = TextView(this).apply { text = "MultiRide AutoAccept"; textSize = 24f; setTextColor(Color.BLACK); setPadding(0, 0, 0, 30) }
+                  val title = TextView(this).apply { text = "Ola & Rapido AutoAccept"; textSize = 24f; setTextColor(Color.BLACK); setPadding(0, 0, 0, 30) }
                   val switchActive = Switch(this).apply {
                       text = "ઓટો-એક્સેપ્ટ ચાલુ / બંધ (ON / OFF)"; textSize = 18f
                       isChecked = prefs.getBoolean("is_enabled", true); setPadding(0, 20, 0, 35)
@@ -90,6 +90,7 @@ jobs:
                   if (currentTime - lastClickTime < 3500) return
 
                   val rootNode = rootInActiveWindow ?: return
+                  val pkgName = rootNode.packageName?.toString() ?: ""
                   var acceptNode: AccessibilityNodeInfo? = null
                   val allText = StringBuilder()
 
@@ -116,31 +117,38 @@ jobs:
 
                   val minPrice = prefs.getInt("min_price", 100)
                   var detectedFare = 0
-                  val matcher = Pattern.compile("(?:₹|RS\\.?|INR)\\s*(\\d+)", Pattern.CASE_INSENSITIVE).matcher(screenData)
+                  val cleanedData = screenData.replace(Regex("\\d+(\\.\\d+)?\\s*(KM|MIN|MINS|SEC)"), "")
+                  val matcher = Pattern.compile("(?:₹|RS\\.?|INR)?\\s*(\\d{2,4})").matcher(cleanedData)
                   while (matcher.find()) {
                       val fare = matcher.group(1)?.toIntOrNull() ?: 0
                       if (fare in (detectedFare + 1)..9999) detectedFare = fare
                   }
 
                   if (isVipLocation || detectedFare >= minPrice) {
-                      if (performClickOrTap(acceptNode!!)) lastClickTime = System.currentTimeMillis()
+                      if (performClickOrTap(acceptNode!!, pkgName == "com.olacabs.driver")) {
+                          lastClickTime = System.currentTimeMillis()
+                      }
                   }
               }
 
-              private fun performClickOrTap(node: AccessibilityNodeInfo): Boolean {
-                  var current: AccessibilityNodeInfo? = node
-                  while (current != null) {
-                      if (current.isClickable && current.performAction(AccessibilityNodeInfo.ACTION_CLICK)) return true
-                      current = current.parent
+              private fun performClickOrTap(node: AccessibilityNodeInfo, isOla: Boolean): Boolean {
+                  if (!isOla) {
+                      var current: AccessibilityNodeInfo? = node
+                      while (current != null) {
+                          if (current.isClickable && current.performAction(AccessibilityNodeInfo.ACTION_CLICK)) return true
+                          current = current.parent
+                      }
                   }
                   val rect = Rect()
                   node.getBoundsInScreen(rect)
-                  if (rect.width() > 0 && rect.height() > 0) {
-                      val path = Path().apply { moveTo(rect.centerX().toFloat(), rect.centerY().toFloat()) }
-                      val gesture = GestureDescription.Builder().addStroke(GestureDescription.StrokeDescription(path, 0, 50)).build()
-                      return dispatchGesture(gesture, null, null)
-                  }
-                  return false
+                  val tapX = if (rect.width() > 0) rect.centerX().toFloat() else (resources.displayMetrics.widthPixels / 2f)
+                  val tapY = if (rect.height() > 0) rect.centerY().toFloat() else (resources.displayMetrics.heightPixels * 0.88f)
+
+                  val path = Path().apply { moveTo(tapX, tapY) }
+                  val gesture = GestureDescription.Builder()
+                      .addStroke(GestureDescription.StrokeDescription(path, 0, 80))
+                      .build()
+                  return dispatchGesture(gesture, null, null)
               }
 
               override fun onInterrupt() {}
@@ -150,29 +158,4 @@ jobs:
           python3 -c '
           u = "http://" + "schemas." + "android." + "com/apk/res/android"
           m = f"""<?xml version="1.0" encoding="utf-8"?><manifest xmlns:android="{u}"><application android:allowBackup="true" android:label="@string/app_name" android:theme="@android:style/Theme.DeviceDefault.Light"><activity android:name=".MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter></activity><service android:name=".MultiRideAcceptService" android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE" android:exported="true"><intent-filter><action android:name="android.accessibilityservice.AccessibilityService"/></intent-filter><meta-data android:name="android.accessibilityservice" android:resource="@xml/accessibility_service_config"/></service></application></manifest>"""
-          c = f"""<?xml version="1.0" encoding="utf-8"?><accessibility-service xmlns:android="{u}" android:description="@string/desc" android:packageNames="com.olacabs.driver, com.rapido.rider, in.mobility.bharattaxidriver" android:accessibilityEventTypes="typeWindowStateChanged|typeWindowContentChanged" android:accessibilityFlags="flagDefault|flagRetrieveInteractiveWindows" android:accessibilityFeedbackType="feedbackGeneric" android:notificationTimeout="50" android:canPerformGestures="true" android:canRetrieveWindowContent="true"/>"""
-          open("app/src/main/AndroidManifest.xml", "w").write(m)
-          open("app/src/main/res/xml/accessibility_service_config.xml", "w").write(c)
-          '
-
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
-        with:
-          java-version: '17'
-          distribution: 'temurin'
-
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v3
-        with:
-          gradle-version: '8.4'
-
-      - name: Build Debug APK
-        run: gradle assembleDebug
-
-      - name: Release APK
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: v1.0-${{ github.run_number }}
-          files: app/build/outputs/apk/debug/app-debug.apk
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          c = f"""<?xml version="1.0" encoding="utf-8"?><accessibility-service xmlns:android="{u}" android:description="@string/desc" android:packageNames="com.olacabs.driver, com.rapido.rider" android:accessibilityEventTypes="typeWindowStateChanged|typeWindowContentChanged" android:accessibilityFlags="flagDefault|flagRetrieveInteractiveWindows" android:accessibilityFeedbackType="feedbackGeneric" android:notificationTimeout="50" android:canPerformGestures="true" android:canRetrieveWindowContent="true"/>"""
