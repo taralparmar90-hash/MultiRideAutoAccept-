@@ -11,50 +11,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Generate Updated App Files
+      - name: Generate App Files
         run: |
-          python3 << 'EOF'
-          import os
-          os.makedirs("app/src/main/res/values", exist_ok=True)
-          os.makedirs("app/src/main/res/xml", exist_ok=True)
-          os.makedirs("app/src/main/java/com/example/multirideautoaccept", exist_ok=True)
+          mkdir -p app/src/main/res/values app/src/main/res/xml app/src/main/java/com/example/multirideautoaccept
+          echo '<resources><string name="app_name">MultiRide AutoAccept</string><string name="desc">Auto accept rides</string></resources>' > app/src/main/res/values/strings.xml
 
-          strings = """<resources><string name="app_name">MultiRide AutoAccept</string><string name="desc">Auto accept rides based on location and fare</string></resources>"""
-          open("app/src/main/res/values/strings.xml", "w").write(strings)
-
-          u = "http://" + "schemas." + "android." + "com/apk/res/android"
-          manifest = f"""<?xml version="1.0" encoding="utf-8"?>
-          <manifest xmlns:android="{u}">
-              <application android:allowBackup="true" android:label="@string/app_name" android:theme="@android:style/Theme.DeviceDefault.Light">
-                  <activity android:name=".MainActivity" android:exported="true">
-                      <intent-filter>
-                          <action android:name="android.intent.action.MAIN" />
-                          <category android:name="android.intent.category.LAUNCHER" />
-                      </intent-filter>
-                  </activity>
-                  <service android:name=".MultiRideAcceptService" android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE" android:exported="true">
-                      <intent-filter>
-                          <action android:name="android.accessibilityservice.AccessibilityService" />
-                      </intent-filter>
-                      <meta-data android:name="android.accessibilityservice" android:resource="@xml/accessibility_service_config" />
-                  </service>
-              </application>
-          </manifest>"""
-          open("app/src/main/AndroidManifest.xml", "w").write(manifest)
-
-          config = f"""<?xml version="1.0" encoding="utf-8"?>
-          <accessibility-service xmlns:android="{u}"
-              android:description="@string/desc"
-              android:packageNames="com.olacabs.driver, com.rapido.rider, in.mobility.bharattaxidriver"
-              android:accessibilityEventTypes="typeWindowStateChanged|typeWindowContentChanged"
-              android:accessibilityFlags="flagDefault|flagRetrieveInteractiveWindows"
-              android:accessibilityFeedbackType="feedbackGeneric"
-              android:notificationTimeout="50"
-              android:canPerformGestures="true"
-              android:canRetrieveWindowContent="true" />"""
-          open("app/src/main/res/xml/accessibility_service_config.xml", "w").write(config)
-
-          main_kt = """package com.example.multirideautoaccept
+          cat << 'EOF' > app/src/main/java/com/example/multirideautoaccept/MainActivity.kt
+          package com.example.multirideautoaccept
 
           import android.app.Activity
           import android.content.Context
@@ -62,26 +25,24 @@ jobs:
           import android.graphics.Color
           import android.os.Bundle
           import android.provider.Settings
+          import android.text.InputType
           import android.widget.*
 
           class MainActivity : Activity() {
               override fun onCreate(savedInstanceState: Bundle?) {
                   super.onCreate(savedInstanceState)
                   val prefs = getSharedPreferences("RidePrefs", Context.MODE_PRIVATE)
-
                   val layout = LinearLayout(this).apply {
                       orientation = LinearLayout.VERTICAL
                       setPadding(45, 55, 45, 45)
                       setBackgroundColor(Color.WHITE)
                   }
-
                   val title = TextView(this).apply {
                       text = "MultiRide AutoAccept"
                       textSize = 24f
                       setTextColor(Color.BLACK)
                       setPadding(0, 0, 0, 30)
                   }
-
                   val switchActive = Switch(this).apply {
                       text = "ઓટો-એક્સેપ્ટ ચાલુ / બંધ (ON / OFF)"
                       textSize = 18f
@@ -89,34 +50,18 @@ jobs:
                       setPadding(0, 20, 0, 35)
                       setOnCheckedChangeListener { _, isChecked ->
                           prefs.edit().putBoolean("is_enabled", isChecked).apply()
-                          Toast.makeText(this@MainActivity, if (isChecked) "Auto-Accept ચાલુ (ON)" else "Auto-Accept બંધ (OFF)", Toast.LENGTH_SHORT).show()
+                          Toast.makeText(this@MainActivity, if (isChecked) "ON" else "OFF", Toast.LENGTH_SHORT).show()
                       }
                   }
-
-                  val lblPrice = TextView(this).apply {
-                      text = "ઓછામાં ઓછું ભાડું (Minimum Fare ₹):"
-                      textSize = 16f
-                      setTextColor(Color.DKGRAY)
-                  }
-
+                  val lblPrice = TextView(this).apply { text = "ઓછામાં ઓછું ભાડું (Minimum Fare ₹):"; textSize = 16f }
                   val etPrice = EditText(this).apply {
-                      inputType = android.text.InputType.TYPE_CLASS_NUMBER
+                      inputType = InputType.TYPE_CLASS_NUMBER
                       setText(prefs.getInt("min_price", 100).toString())
-                      textSize = 18f
                   }
-
-                  val lblLoc = TextView(this).apply {
-                      text = "VIP લોકેશન (ભાડું જોયા વગર એક્સેપ્ટ થશે):"
-                      textSize = 16f
-                      setTextColor(Color.DKGRAY)
-                      setPadding(0, 25, 0, 5)
-                  }
-
+                  val lblLoc = TextView(this).apply { text = "VIP લોકેશન (ભાડું જોયા વગર એક્સેપ્ટ):"; textSize = 16f; setPadding(0, 25, 0, 5) }
                   val etLoc = EditText(this).apply {
                       setText(prefs.getString("vip_locations", "ADANI, GANDHINAGAR, SECTOR, AIRPORT, SANAND"))
-                      textSize = 16f
                   }
-
                   val btnSave = Button(this).apply {
                       text = "સેટિંગ્સ સેવ કરો (SAVE)"
                       setBackgroundColor(Color.parseColor("#1B8A3D"))
@@ -125,33 +70,23 @@ jobs:
                           val price = etPrice.text.toString().toIntOrNull() ?: 100
                           val locs = etLoc.text.toString().uppercase()
                           prefs.edit().putInt("min_price", price).putString("vip_locations", locs).apply()
-                          Toast.makeText(this@MainActivity, "સેટિંગ્સ સેવ થઈ ગયા!", Toast.LENGTH_SHORT).show()
+                          Toast.makeText(this@MainActivity, "Saved!", Toast.LENGTH_SHORT).show()
                       }
                   }
-
                   val btnAcc = Button(this).apply {
                       text = "Accessibility પરમિશન ખોલો"
-                      setOnClickListener {
-                          startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
-                      }
+                      setOnClickListener { startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) }
                   }
-
-                  layout.addView(title)
-                  layout.addView(switchActive)
-                  layout.addView(lblPrice)
-                  layout.addView(etPrice)
-                  layout.addView(lblLoc)
-                  layout.addView(etLoc)
-                  layout.addView(btnSave)
-                  layout.addView(TextView(this).apply { text = " " })
-                  layout.addView(btnAcc)
-
+                  layout.addView(title); layout.addView(switchActive); layout.addView(lblPrice)
+                  layout.addView(etPrice); layout.addView(lblLoc); layout.addView(etLoc)
+                  layout.addView(btnSave); layout.addView(TextView(this).apply { text = " " }); layout.addView(btnAcc)
                   setContentView(layout)
               }
-          }"""
-          open("app/src/main/java/com/example/multirideautoaccept/MainActivity.kt", "w").write(main_kt)
+          }
+          EOF
 
-          service_kt = """package com.example.multirideautoaccept
+          cat << 'EOF' > app/src/main/java/com/example/multirideautoaccept/MultiRideAcceptService.kt
+          package com.example.multirideautoaccept
 
           import android.accessibilityservice.AccessibilityService
           import android.accessibilityservice.GestureDescription
@@ -163,18 +98,15 @@ jobs:
           import java.util.regex.Pattern
 
           class MultiRideAcceptService : AccessibilityService() {
-
               private var lastClickTime: Long = 0
 
               override fun onAccessibilityEvent(event: AccessibilityEvent?) {
                   val prefs = getSharedPreferences("RidePrefs", Context.MODE_PRIVATE)
                   if (!prefs.getBoolean("is_enabled", true)) return
-
                   val currentTime = System.currentTimeMillis()
                   if (currentTime - lastClickTime < 3500) return
 
                   val rootNode = rootInActiveWindow ?: return
-
                   var acceptNode: AccessibilityNodeInfo? = null
                   val allText = StringBuilder()
 
@@ -182,21 +114,13 @@ jobs:
                       if (node == null) return
                       val txt = node.text?.toString()?.trim() ?: ""
                       val desc = node.contentDescription?.toString()?.trim() ?: ""
-
                       if (txt.isNotEmpty()) allText.append(txt).append(" ")
                       if (desc.isNotEmpty()) allText.append(desc).append(" ")
-
-                      if (txt.equals("Accept", ignoreCase = true) ||
-                          txt.startsWith("Accept in", ignoreCase = true) ||
-                          txt.equals("Accept Ride", ignoreCase = true) ||
-                          txt.equals("Confirm", ignoreCase = true) ||
-                          txt.equals("સ્વીકારો", ignoreCase = true)) {
+                      if (txt.equals("Accept", true) || txt.startsWith("Accept in", true) ||
+                          txt.equals("Accept Ride", true) || txt.equals("Confirm", true) || txt.equals("સ્વીકારો", true)) {
                           acceptNode = node
                       }
-
-                      for (i in 0 until node.childCount) {
-                          scanNodes(node.getChild(i))
-                      }
+                      for (i in 0 until node.childCount) scanNodes(node.getChild(i))
                   }
 
                   scanNodes(rootNode)
@@ -205,14 +129,47 @@ jobs:
                   val screenData = allText.toString().uppercase()
                   val vipList = (prefs.getString("vip_locations", "ADANI, GANDHINAGAR, SECTOR, AIRPORT, SANAND") ?: "")
                       .split(",").map { it.trim() }.filter { it.isNotEmpty() }
-
-                  var isVipLocation = false
-                  for (loc in vipList) {
-                      if (screenData.contains(loc)) {
-                          isVipLocation = true
-                          break
-                      }
-                  }
+                  val isVipLocation = vipList.any { screenData.contains(it) }
 
                   val minPrice = prefs.getInt("min_price", 100)
                   var detectedFare = 0
+                  val matcher = Pattern.compile("(?:₹|RS\\.?|INR)\\s*(\\d+)", Pattern.CASE_INSENSITIVE).matcher(screenData)
+                  while (matcher.find()) {
+                      val fare = matcher.group(1)?.toIntOrNull() ?: 0
+                      if (fare in (detectedFare + 1)..9999) detectedFare = fare
+                  }
+
+                  if (isVipLocation || detectedFare >= minPrice) {
+                      if (performClickOrTap(acceptNode!!)) lastClickTime = System.currentTimeMillis()
+                  }
+              }
+
+              private fun performClickOrTap(node: AccessibilityNodeInfo): Boolean {
+                  var current: AccessibilityNodeInfo? = node
+                  while (current != null) {
+                      if (current.isClickable && current.performAction(AccessibilityNodeInfo.ACTION_CLICK)) return true
+                      current = current.parent
+                  }
+                  val rect = Rect()
+                  node.getBoundsInScreen(rect)
+                  if (rect.width() > 0 && rect.height() > 0) {
+                      val path = Path().apply { moveTo(rect.centerX().toFloat(), rect.centerY().toFloat()) }
+                      val gesture = GestureDescription.Builder().addStroke(GestureDescription.StrokeDescription(path, 0, 50)).build()
+                      return dispatchGesture(gesture, null, null)
+                  }
+                  return false
+              }
+
+              override fun onInterrupt() {}
+          }
+          EOF
+
+          python3 -c '
+          u = "http://" + "schemas." + "android." + "com/apk/res/android"
+          m = f"""<?xml version="1.0" encoding="utf-8"?><manifest xmlns:android="{u}"><application android:allowBackup="true" android:label="@string/app_name" android:theme="@android:style/Theme.DeviceDefault.Light"><activity android:name=".MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter></activity><service android:name=".MultiRideAcceptService" android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE" android:exported="true"><intent-filter><action android:name="android.accessibilityservice.AccessibilityService"/></intent-filter><meta-data android:name="android.accessibilityservice" android:resource="@xml/accessibility_service_config"/></service></application></manifest>"""
+          c = f"""<?xml version="1.0" encoding="utf-8"?><accessibility-service xmlns:android="{u}" android:description="@string/desc" android:packageNames="com.olacabs.driver, com.rapido.rider, in.mobility.bharattaxidriver" android:accessibilityEventTypes="typeWindowStateChanged|typeWindowContentChanged" android:accessibilityFlags="flagDefault|flagRetrieveInteractiveWindows" android:accessibilityFeedbackType="feedbackGeneric" android:notificationTimeout="50" android:canPerformGestures="true" android:canRetrieveWindowContent="true"/>"""
+          open("app/src/main/AndroidManifest.xml", "w").write(m)
+          open("app/src/main/res/xml/accessibility_service_config.xml", "w").write(c)
+          '
+
+      - name: Set up JDK 17
