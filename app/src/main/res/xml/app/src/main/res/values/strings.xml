@@ -1,1 +1,5 @@
+<resources>
+    <string name="app_name">MultiRide AutoAccept</string>
+    <string name="desc">Auto accept rides</string>
+</resources>
 
