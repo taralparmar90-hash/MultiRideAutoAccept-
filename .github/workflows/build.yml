@@ -14,6 +14,10 @@ jobs:
       - name: Generate Clean XML Files
         run: |
           python3 -c '
+          import os
+          os.makedirs("app/src/main/res/values", exist_ok=True)
+          s = """<resources><string name="app_name">MultiRide AutoAccept</string><string name="desc">Auto accept rides</string></resources>"""
+          open("app/src/main/res/values/strings.xml", "w").write(s)
           u = "http://" + "schemas." + "android." + "com/apk/res/android"
           m = f"""<?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="{u}">
