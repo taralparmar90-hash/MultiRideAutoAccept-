@@ -13,7 +13,7 @@ jobs:
 
       - name: Generate Updated App Files
         run: |
-          python3 -c '
+          python3 << 'EOF'
           import os
           os.makedirs("app/src/main/res/values", exist_ok=True)
           os.makedirs("app/src/main/res/xml", exist_ok=True)
@@ -143,7 +143,7 @@ jobs:
                   layout.addView(lblLoc)
                   layout.addView(etLoc)
                   layout.addView(btnSave)
-                  layout.addView(TextView(this).apply { text = "\\n" })
+                  layout.addView(TextView(this).apply { text = " " })
                   layout.addView(btnAcc)
 
                   setContentView(layout)
