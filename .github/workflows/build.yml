@@ -164,6 +164,12 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
         with:
+              - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: MultiRide-AutoAccept-APK
+          path: app/build/outputs/apk/debug/app-debug.apk
+
           gradle-version: '8.4'
 
       - name: Build Debug APK
