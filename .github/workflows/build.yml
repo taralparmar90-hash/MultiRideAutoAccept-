@@ -1,49 +1,28 @@
 name: Build Android APK
-
 on:
   push:
     branches: [ main ]
-  workflow_dispatch:
-
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - name: Generate App Files
         run: |
           mkdir -p app/src/main/res/values app/src/main/res/xml app/src/main/java/com/example/multirideautoaccept
           echo '<resources><string name="app_name">MultiRide AutoAccept</string><string name="desc">Auto accept Ola and Rapido rides</string></resources>' > app/src/main/res/values/strings.xml
-
           cat << 'EOF' > app/src/main/java/com/example/multirideautoaccept/MainActivity.kt
           package com.example.multirideautoaccept
-          import android.app.Activity
-          import android.content.Context
-          import android.content.Intent
-          import android.graphics.Color
-          import android.os.Bundle
-          import android.provider.Settings
-          import android.text.InputType
-          import android.widget.*
-
+          import android.app.Activity; import android.content.Context; import android.content.Intent; import android.graphics.Color; import android.os.Bundle; import android.provider.Settings; import android.text.InputType; import android.widget.*
           class MainActivity : Activity() {
               override fun onCreate(savedInstanceState: Bundle?) {
                   super.onCreate(savedInstanceState)
                   val prefs = getSharedPreferences("RidePrefs", Context.MODE_PRIVATE)
-                  val layout = LinearLayout(this).apply {
-                      orientation = LinearLayout.VERTICAL
-                      setPadding(45, 55, 45, 45)
-                      setBackgroundColor(Color.WHITE)
-                  }
+                  val layout = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(45, 55, 45, 45); setBackgroundColor(Color.WHITE) }
                   val title = TextView(this).apply { text = "Ola & Rapido AutoAccept"; textSize = 24f; setTextColor(Color.BLACK); setPadding(0, 0, 0, 30) }
                   val switchActive = Switch(this).apply {
-                      text = "ઓટો-એક્સેપ્ટ ચાલુ / બંધ (ON / OFF)"; textSize = 18f
-                      isChecked = prefs.getBoolean("is_enabled", true); setPadding(0, 20, 0, 35)
-                      setOnCheckedChangeListener { _, isChecked ->
-                          prefs.edit().putBoolean("is_enabled", isChecked).apply()
-                          Toast.makeText(this@MainActivity, if (isChecked) "ON" else "OFF", Toast.LENGTH_SHORT).show()
-                      }
+                      text = "ઓટો-એક્સેપ્ટ ચાલુ / બંધ (ON / OFF)"; textSize = 18f; isChecked = prefs.getBoolean("is_enabled", true); setPadding(0, 20, 0, 35)
+                      setOnCheckedChangeListener { _, isChecked -> prefs.edit().putBoolean("is_enabled", isChecked).apply(); Toast.makeText(this@MainActivity, if (isChecked) "ON" else "OFF", Toast.LENGTH_SHORT).show() }
                   }
                   val lblPrice = TextView(this).apply { text = "ઓછામાં ઓછું ભાડું (Minimum Fare ₹):"; textSize = 16f }
                   val etPrice = EditText(this).apply { inputType = InputType.TYPE_CLASS_NUMBER; setText(prefs.getInt("min_price", 100).toString()) }
@@ -51,116 +30,71 @@ jobs:
                   val etLoc = EditText(this).apply { setText(prefs.getString("vip_locations", "ADANI, GANDHINAGAR, SECTOR, AIRPORT, SANAND")) }
                   val btnSave = Button(this).apply {
                       text = "સેટિંગ્સ સેવ કરો (SAVE)"; setBackgroundColor(Color.parseColor("#1B8A3D")); setTextColor(Color.WHITE)
-                      setOnClickListener {
-                          val price = etPrice.text.toString().toIntOrNull() ?: 100
-                          val locs = etLoc.text.toString().uppercase()
-                          prefs.edit().putInt("min_price", price).putString("vip_locations", locs).apply()
-                          Toast.makeText(this@MainActivity, "Saved!", Toast.LENGTH_SHORT).show()
-                      }
+                      setOnClickListener { prefs.edit().putInt("min_price", etPrice.text.toString().toIntOrNull() ?: 100).putString("vip_locations", etLoc.text.toString().uppercase()).apply(); Toast.makeText(this@MainActivity, "Saved!", Toast.LENGTH_SHORT).show() }
                   }
-                  val btnAcc = Button(this).apply {
-                      text = "Accessibility પરમિશન ખોલો"
-                      setOnClickListener { startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) }
-                  }
-                  layout.addView(title); layout.addView(switchActive); layout.addView(lblPrice); layout.addView(etPrice)
-                  layout.addView(lblLoc); layout.addView(etLoc); layout.addView(btnSave); layout.addView(TextView(this).apply { text = " " }); layout.addView(btnAcc)
+                  val btnAcc = Button(this).apply { text = "Accessibility પરમિશન ખોલો"; setOnClickListener { startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) } }
+                  layout.addView(title); layout.addView(switchActive); layout.addView(lblPrice); layout.addView(etPrice); layout.addView(lblLoc); layout.addView(etLoc); layout.addView(btnSave); layout.addView(TextView(this).apply { text = " " }); layout.addView(btnAcc)
                   setContentView(layout)
               }
           }
           EOF
-
           cat << 'EOF' > app/src/main/java/com/example/multirideautoaccept/MultiRideAcceptService.kt
           package com.example.multirideautoaccept
-          import android.accessibilityservice.AccessibilityService
-          import android.accessibilityservice.GestureDescription
-          import android.content.Context
-          import android.graphics.Path
-          import android.graphics.Rect
-          import android.view.accessibility.AccessibilityEvent
-          import android.view.accessibility.AccessibilityNodeInfo
-          import java.util.regex.Pattern
-
+          import android.accessibilityservice.AccessibilityService; import android.accessibilityservice.GestureDescription; import android.content.Context; import android.graphics.Path; import android.graphics.Rect; import android.view.accessibility.AccessibilityEvent; import android.view.accessibility.AccessibilityNodeInfo; import java.util.regex.Pattern
           class MultiRideAcceptService : AccessibilityService() {
               private var lastClickTime: Long = 0
-
               override fun onAccessibilityEvent(event: AccessibilityEvent?) {
                   val prefs = getSharedPreferences("RidePrefs", Context.MODE_PRIVATE)
                   if (!prefs.getBoolean("is_enabled", true)) return
-                  val currentTime = System.currentTimeMillis()
-                  if (currentTime - lastClickTime < 3000) return
-
+                  if (System.currentTimeMillis() - lastClickTime < 3000) return
                   val rootNode = rootInActiveWindow ?: return
                   var acceptNode: AccessibilityNodeInfo? = null
                   val allText = StringBuilder()
-
                   fun scanNodes(node: AccessibilityNodeInfo?) {
                       if (node == null) return
-                      val txt = node.text?.toString()?.trim() ?: ""
-                      val desc = node.contentDescription?.toString()?.trim() ?: ""
+                      val txt = node.text?.toString()?.trim() ?: ""; val desc = node.contentDescription?.toString()?.trim() ?: ""
                       if (txt.isNotEmpty()) allText.append(txt).append(" ")
                       if (desc.isNotEmpty()) allText.append(desc).append(" ")
-                      if (txt.equals("Accept", true) || txt.startsWith("Accept in", true) ||
-                          txt.equals("Accept Ride", true) || txt.equals("Confirm", true) || txt.equals("સ્વીકારો", true)) {
-                          acceptNode = node
-                      }
+                      if (txt.equals("Accept", true) || txt.startsWith("Accept in", true) || txt.equals("Accept Ride", true) || txt.equals("Confirm", true) || txt.equals("સ્વીકારો", true)) acceptNode = node
                       for (i in 0 until node.childCount) scanNodes(node.getChild(i))
                   }
-
                   scanNodes(rootNode)
                   if (acceptNode == null) return
-
                   val screenData = allText.toString().uppercase()
-                  val vipList = (prefs.getString("vip_locations", "ADANI, GANDHINAGAR, SECTOR, AIRPORT, SANAND") ?: "")
-                      .split(",").map { it.trim() }.filter { it.isNotEmpty() }
+                  val vipList = (prefs.getString("vip_locations", "ADANI, GANDHINAGAR, SECTOR, AIRPORT, SANAND") ?: "").split(",").map { it.trim() }.filter { it.isNotEmpty() }
                   val isVipLocation = vipList.any { screenData.contains(it) }
-
                   val minPrice = prefs.getInt("min_price", 100)
                   var detectedFare = 0
                   val cleanedData = screenData.replace(Regex("\\d+(\\.\\d+)?\\s*(KM|MIN|MINS|SEC)"), "")
                   val matcher = Pattern.compile("(?:₹|RS\\.?|INR)?\\s*(\\d{2,4})").matcher(cleanedData)
-                  while (matcher.find()) {
-                      val fare = matcher.group(1)?.toIntOrNull() ?: 0
-                      if (fare in (detectedFare + 1)..9999) detectedFare = fare
-                  }
-
-                  if (isVipLocation || detectedFare >= minPrice) {
-                      if (performTripleTrigger(acceptNode!!)) {
-                          lastClickTime = System.currentTimeMillis()
-                      }
-                  }
+                  while (matcher.find()) { val fare = matcher.group(1)?.toIntOrNull() ?: 0; if (fare in (detectedFare + 1)..9999) detectedFare = fare }
+                  if (isVipLocation || detectedFare >= minPrice) { if (performTripleTrigger(acceptNode!!)) lastClickTime = System.currentTimeMillis() }
               }
-
               private fun performTripleTrigger(node: AccessibilityNodeInfo): Boolean {
-                  var clicked = false
-                  var current: AccessibilityNodeInfo? = node
-                  while (current != null) {
-                      if (current.isClickable && current.performAction(AccessibilityNodeInfo.ACTION_CLICK)) {
-                          clicked = true
-                          break
-                      }
-                      current = current.parent
-                  }
-
-                  val rect = Rect()
-                  node.getBoundsInScreen(rect)
+                  var clicked = false; var current: AccessibilityNodeInfo? = node
+                  while (current != null) { if (current.isClickable && current.performAction(AccessibilityNodeInfo.ACTION_CLICK)) { clicked = true; break }; current = current.parent }
+                  val rect = Rect(); node.getBoundsInScreen(rect)
                   val tapX = if (rect.width() > 0) rect.centerX().toFloat() else (resources.displayMetrics.widthPixels / 2f)
                   val tapY = if (rect.height() > 0) rect.centerY().toFloat() else (resources.displayMetrics.heightPixels * 0.88f)
-
-                  val path = Path().apply {
-                      moveTo(tapX, tapY)
-                      lineTo(tapX + 2f, tapY + 2f)
-                  }
-                  val gesture = GestureDescription.Builder()
-                      .addStroke(GestureDescription.StrokeDescription(path, 0, 120))
-                      .build()
-                  val gestured = dispatchGesture(gesture, null, null)
-                  return clicked || gestured
+                  val path = Path().apply { moveTo(tapX, tapY); lineTo(tapX + 2f, tapY + 2f) }
+                  val gesture = GestureDescription.Builder().addStroke(GestureDescription.StrokeDescription(path, 0, 120)).build()
+                  return clicked || dispatchGesture(gesture, null, null)
               }
-
               override fun onInterrupt() {}
           }
           EOF
-
-          python3 << 'EOF'
-          u = "http://" + "schemas." + "android." + "com/apk/res/android"
-          m = f'<?xml version="1.0" encoding="utf-8"?><manifest xmlns:android="{u}"><application android:allowBackup="true" android:label="@string/app_name" android:theme="@android:style/Theme.DeviceDefault.Light"><activity android:name=".MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter></activity><service android:name=".MultiRideAcceptService" android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE" android:exported="true"><intent-filter><action android:name="android.accessibilityservice.AccessibilityService"/></intent-filter><meta-data android:name="android.accessibilityservice" android:resource="@xml/accessibility_service_config"/></service></application></manifest>'
+          python3 -c 'u="http://"+"schemas."+"android."+"com/apk/res/android"; open("app/src/main/AndroidManifest.xml","w").write(f"<?xml version=\"1.0\" encoding=\"utf-8\"?><manifest xmlns:android=\"{u}\"><application android:allowBackup=\"true\" android:label=\"@string/app_name\" android:theme=\"@android:style/Theme.DeviceDefault.Light\"><activity android:name=\".MainActivity\" android:exported=\"true\"><intent-filter><action android:name=\"android.intent.action.MAIN\"/><category android:name=\"android.intent.category.LAUNCHER\"/></intent-filter></activity><service android:name=\".MultiRideAcceptService\" android:permission=\"android.permission.BIND_ACCESSIBILITY_SERVICE\" android:exported=\"true\"><intent-filter><action android:name=\"android.accessibilityservice.AccessibilityService\"/></intent-filter><meta-data android:name=\"android.accessibilityservice\" android:resource=\"@xml/accessibility_service_config\"/></service></application></manifest>"); open("app/src/main/res/xml/accessibility_service_config.xml","w").write(f"<?xml version=\"1.0\" encoding=\"utf-8\"?><accessibility-service xmlns:android=\"{u}\" android:description=\"@string/desc\" android:packageNames=\"com.olacabs.driver, com.rapido.rider\" android:accessibilityEventTypes=\"typeWindowStateChanged|typeWindowContentChanged\" android:accessibilityFlags=\"flagDefault|flagRetrieveInteractiveWindows|flagReportViewIds|flagRequestEnhancedWebAccessibility\" android:accessibilityFeedbackType=\"feedbackGeneric\" android:notificationTimeout=\"30\" android:canPerformGestures=\"true\" android:canRetrieveWindowContent=\"true\"/>")'
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+      - uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: '8.4'
+      - run: gradle assembleDebug
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v1.0-${{ github.run_number }}
+          files: app/build/outputs/apk/debug/app-debug.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
