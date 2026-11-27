@@ -1,40 +1,55 @@
 package com.example.multirideautoaccept
 
 import android.accessibilityservice.AccessibilityService
+import android.accessibilityservice.GestureDescription
+import android.graphics.Path
+import android.graphics.Rect
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 
 class MultiRideAcceptService : AccessibilityService() {
 
-    private var lastClickTime: Long = 0
+    private var lastTapTime = 0L
+
+    // Button texts to look for (exact match, case-insensitive)
+    private val buttonTexts = listOf("accept", "accept ride", "confirm", "સ્વીકારો")
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
-        val currentTime = System.currentTimeMillis()
-        if (currentTime - lastClickTime < 3000) return
+        val now = System.currentTimeMillis()
+        if (now - lastTapTime < 1500) return
 
-        val rootNode = rootInActiveWindow ?: return
-        val buttonTexts = listOf("Accept", "Confirm", "Accept Ride", "સ્વીકારો")
+        val root = rootInActiveWindow ?: return
+        val target = findAcceptNode(root) ?: return
 
-        for (text in buttonTexts) {
-            val nodes = rootNode.findAccessibilityNodeInfosByText(text)
-            for (node in nodes) {
-                if (clickNodeOrParent(node)) {
-                    lastClickTime = System.currentTimeMillis()
-                    return
-                }
-            }
-        }
+        val rect = Rect()
+        target.getBoundsInScreen(rect)
+        if (rect.isEmpty) return
+
+        lastTapTime = now
+        tapAt(rect.exactCenterX(), rect.exactCenterY())
     }
 
-    private fun clickNodeOrParent(node: AccessibilityNodeInfo?): Boolean {
-        var current = node
-        while (current != null) {
-            if (current.isClickable) {
-                return current.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+    private fun findAcceptNode(root: AccessibilityNodeInfo): AccessibilityNodeInfo? {
+        for (text in buttonTexts) {
+            val nodes = root.findAccessibilityNodeInfosByText(text)
+            for (n in nodes) {
+                val label = (n.text ?: n.contentDescription)?.toString()?.trim()?.lowercase()
+                if (label == text && n.isVisibleToUser) return n
             }
-            current = current.parent
         }
-        return false
+        return null
+    }
+
+    // Real screen tap (works when performAction(ACTION_CLICK) does not)
+    private fun tapAt(x: Float, y: Float) {
+        val path = Path().apply { moveTo(x, y) }
+        val stroke = GestureDescription.StrokeDescription(path, 0, 60)
+        val gesture = GestureDescription.Builder().addStroke(stroke).build()
+        dispatchGesture(gesture, object : AccessibilityService.GestureResultCallback() {
+            override fun onCompleted(gestureDescription: GestureDescription?) {
+                lastTapTime = System.currentTimeMillis()
+            }
+        }, null)
     }
 
     override fun onInterrupt() {}
